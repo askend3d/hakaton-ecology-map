@@ -1,0 +1,57 @@
+import { PollutionPoint } from "@/types/pollution";
+
+// Mock data для демонстрации (Каспийское море, район Актау, Казахстан)
+export const mockPollutionPoints: PollutionPoint[] = [
+  {
+    id: "1",
+    lat: 43.6562,
+    lng: 51.1694,
+    type: "plastic",
+    status: "new",
+    description: "Большое количество пластиковых бутылок и пакетов на берегу",
+    reportedBy: "Анна К.",
+    reportedAt: new Date("2024-01-15"),
+  },
+  {
+    id: "2",
+    lat: 43.6402,
+    lng: 51.1544,
+    type: "household_waste",
+    status: "in_progress",
+    description: "Несанкционированная свалка бытового мусора",
+    reportedBy: "Марат А.",
+    reportedAt: new Date("2024-01-10"),
+    updatedAt: new Date("2024-01-14"),
+  },
+  {
+    id: "3",
+    lat: 43.6712,
+    lng: 51.1894,
+    type: "oil_spill",
+    status: "new",
+    description: "Масляное пятно в воде, возможно утечка с лодки",
+    reportedBy: "Экопатруль Актау",
+    reportedAt: new Date("2024-01-16"),
+  },
+  {
+    id: "4",
+    lat: 43.6312,
+    lng: 51.1394,
+    type: "plastic",
+    status: "cleaned",
+    description: "Пластиковые отходы после пикника",
+    reportedBy: "Волонтеры Clean Coast",
+    reportedAt: new Date("2024-01-05"),
+    updatedAt: new Date("2024-01-12"),
+  },
+  {
+    id: "5",
+    lat: 43.6862,
+    lng: 51.2044,
+    type: "industrial_waste",
+    status: "new",
+    description: "Строительный мусор и металлические конструкции",
+    reportedBy: "Иван П.",
+    reportedAt: new Date("2024-01-17"),
+  },
+];
