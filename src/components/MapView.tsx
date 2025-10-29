@@ -1,113 +1,254 @@
-import { useEffect, useRef } from "react";
-import { PollutionPoint } from "@/types/pollution";
-import { MAP_CENTER, MAP_ZOOM, POLLUTION_STATUS_LABELS, POLLUTION_TYPE_LABELS } from "@/lib/constants";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-
-// Fix Leaflet default icon issue
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-});
+import {
+	MAP_CENTER,
+	MAP_ZOOM,
+	POLLUTION_STATUS_LABELS,
+	POLLUTION_TYPE_LABELS,
+} from '@/lib/constants'
+import { PollutionPoint } from '@/types/pollution'
+import { useEffect, useRef } from 'react'
 
 interface MapViewProps {
-  points: PollutionPoint[];
-  onPointSelect: (point: PollutionPoint) => void;
-  selectedPoint?: PollutionPoint | null;
+	points: PollutionPoint[]
+	onPointSelect: (point: PollutionPoint) => void
+	selectedPoint?: PollutionPoint | null
+	onMapClick?: (lat: number, lng: number) => void
+	pickMode?: boolean
+	onCenterChange?: (lat: number, lng: number) => void
 }
 
-const getMarkerColor = (status: string) => {
-  switch (status) {
-    case "new":
-      return "#ef4444";
-    case "in_progress":
-      return "#f97316";
-    case "cleaned":
-      return "#22c55e";
-    default:
-      return "#3b82f6";
-  }
-};
+declare global {
+	interface Window {
+		ymaps?: YMapsNS
+	}
+}
 
-const createCustomIcon = (status: string) => {
-  const color = getMarkerColor(status);
-  return L.divIcon({
-    className: "custom-marker",
-    html: `<div style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  });
-};
+interface YMapEventsApi {
+	add: (
+		name: string,
+		cb: (e: { get: (key: string) => unknown }) => void
+	) => void
+}
+interface YMapGeoObjectsApi {
+	add: (obj: YPlacemark) => void
+	remove: (obj: YPlacemark) => void
+}
+interface YMapInstance {
+	events: YMapEventsApi
+	getCenter(): [number, number]
+	setCenter(center: [number, number], zoom?: number, options?: unknown): void
+	geoObjects: YMapGeoObjectsApi
+	destroy(): void
+}
+interface YPlacemark {
+	events: { add: (name: string, cb: () => void) => void }
+}
+interface YMapsNS {
+	Map: new (
+		el: HTMLElement,
+		opts: { center: [number, number]; zoom: number; controls?: string[] }
+	) => YMapInstance
+	Placemark: new (
+		coords: [number, number],
+		props?: Record<string, unknown>,
+		options?: Record<string, unknown>
+	) => YPlacemark
+	ready: (cb: () => void) => void
+}
 
-export function MapView({ points, onPointSelect, selectedPoint }: MapViewProps) {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<L.Marker[]>([]);
+function loadYandexApi(apiKey?: string): Promise<YMapsNS> {
+	if (window.ymaps) return Promise.resolve(window.ymaps!)
+	return new Promise((resolve, reject) => {
+		const script = document.createElement('script')
+		script.async = true
+		script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU${
+			apiKey ? `&apikey=${apiKey}` : ''
+		}`
+		script.onload = () => window.ymaps?.ready(() => resolve(window.ymaps!))
+		script.onerror = reject
+		document.head.appendChild(script)
+	})
+}
 
-  useEffect(() => {
-    if (!mapContainer.current || mapRef.current) return;
+// Убрали Leaflet-иконки (переход на Яндекс.Карты)
 
-    mapRef.current = L.map(mapContainer.current).setView(MAP_CENTER, MAP_ZOOM);
+export function MapView({
+	points,
+	onPointSelect,
+	selectedPoint,
+	onMapClick,
+	pickMode,
+	onCenterChange,
+}: MapViewProps) {
+	const containerRef = useRef<HTMLDivElement | null>(null)
+	const mapRef = useRef<YMapInstance | null>(null)
+	const placemarksRef = useRef<YPlacemark[]>([])
+	const onMapClickRef = useRef<typeof onMapClick>(onMapClick)
+	const onCenterChangeRef = useRef<typeof onCenterChange>(onCenterChange)
+	const pickModeRef = useRef<boolean | undefined>(pickMode)
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(mapRef.current);
+	// Держим актуальные колбэки/флаги в ref, чтобы не перевешивать события
+	useEffect(() => {
+		onMapClickRef.current = onMapClick
+		onCenterChangeRef.current = onCenterChange
+		pickModeRef.current = pickMode
+	}, [onMapClick, onCenterChange, pickMode])
 
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, []);
+	// Инициализация карты и однократная регистрация обработчиков
+	useEffect(() => {
+		let unmounted = false
+		const apiKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY as
+			| string
+			| undefined
+		loadYandexApi(apiKey)
+			.then(ymaps => {
+				if (unmounted || !containerRef.current) return
+				mapRef.current = new ymaps.Map(containerRef.current, {
+					center: MAP_CENTER,
+					zoom: MAP_ZOOM,
+					controls: ['zoomControl'],
+				})
 
-  useEffect(() => {
-    if (!mapRef.current) return;
+				// Один раз вешаем обработчик клика по карте
+        mapRef.current.events.add('click', () => {
+          if (pickModeRef.current && mapRef.current && onMapClickRef.current) {
+            const center = mapRef.current.getCenter()
+            onMapClickRef.current(center[0], center[1])
+          }
+        })
+        
 
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current = [];
+				// Один раз вешаем обработчик изменения границ (для прицела)
+				const emitCenter = () => {
+					if (!mapRef.current) return
+					if (!pickModeRef.current || !onCenterChangeRef.current) return
+					const c = mapRef.current.getCenter()
+					onCenterChangeRef.current(c[0], c[1])
+				}
+				// Сразу сообщаем центр, если включён pickMode
+				emitCenter()
+				mapRef.current.events.add(
+					'boundschange',
+					emitCenter as unknown as (e: { get: (k: string) => unknown }) => void
+				)
+			})
+			.catch(() => {})
 
-    points.forEach((point) => {
-      if (!mapRef.current) return;
+		return () => {
+			unmounted = true
+			if (mapRef.current) {
+				mapRef.current.destroy()
+				mapRef.current = null
+			}
+		}
+	}, [])
 
-      const marker = L.marker([point.lat, point.lng], {
-        icon: createCustomIcon(point.status),
-      }).addTo(mapRef.current);
+	// Обновление маркеров
+	useEffect(() => {
+		const ymaps = window.ymaps
+		if (!mapRef.current || !ymaps) return
 
-      const popupContent = `
-        <div style="min-width: 200px;">
-          <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 8px;">
-            ${POLLUTION_TYPE_LABELS[point.type]}
-          </div>
-          <div style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-bottom: 8px; background-color: ${
-            point.status === "new" ? "#fef2f2" : point.status === "in_progress" ? "#fffbeb" : "#f0fdf4"
-          }; color: ${
-        point.status === "new" ? "#991b1b" : point.status === "in_progress" ? "#92400e" : "#166534"
-      };">
-            ${POLLUTION_STATUS_LABELS[point.status]}
-          </div>
-          <p style="font-size: 0.75rem; color: #6b7280; margin-top: 8px;">
-            ${point.description}
-          </p>
-        </div>
-      `;
+		placemarksRef.current.forEach(p => p && mapRef.current.geoObjects.remove(p))
+		placemarksRef.current = []
 
-      marker.bindPopup(popupContent);
-      marker.on("click", () => onPointSelect(point));
+		const statusPreset: Record<string, string> = {
+			new: 'islands#redDotIcon',
+			in_progress: 'islands#orangeDotIcon',
+			cleaned: 'islands#greenDotIcon',
+		}
 
-      markersRef.current.push(marker);
-    });
-  }, [points, onPointSelect]);
+		points.forEach(point => {
+			const pm = new ymaps.Placemark(
+				[point.lat, point.lng],
+				{
+					balloonContent: `
+                        <div style="min-width:200px">
+                          <div style="font-weight:600;margin-bottom:8px">${
+														POLLUTION_TYPE_LABELS[point.type]
+													}</div>
+                          <div style="display:inline-block;padding:2px 8px;border-radius:4px;margin-bottom:8px;background:#fef2f2;color:#991b1b">${
+														POLLUTION_STATUS_LABELS[point.status]
+													}</div>
+                          <p style="color:#6b7280;margin-top:8px;font-size:12px">${
+														point.description
+													}</p>
+                        </div>
+                    `,
+				},
+				{ preset: statusPreset[point.status] || 'islands#blueDotIcon' }
+			)
+			pm.events.add('click', () => onPointSelect(point))
+			mapRef.current.geoObjects.add(pm)
+			placemarksRef.current.push(pm)
+		})
+	}, [points, onPointSelect])
 
-  useEffect(() => {
-    if (!mapRef.current || !selectedPoint) return;
+	// Перелёт к выбранной точке
+	useEffect(() => {
+		if (!mapRef.current || !selectedPoint) return
+		mapRef.current.setCenter([selectedPoint.lat, selectedPoint.lng], 15, {
+			duration: 200,
+		})
+	}, [selectedPoint])
 
-    mapRef.current.flyTo([selectedPoint.lat, selectedPoint.lng], 15, {
-      duration: 1,
-    });
-  }, [selectedPoint]);
-
-  return <div ref={mapContainer} className="h-full w-full rounded-lg z-10" />;
+	return (
+		<div className='relative h-full w-full rounded-lg border overflow-hidden'>
+			<div ref={containerRef} className='absolute inset-0 h-full w-full' />
+			{/* Crosshair is always at container center */}
+			{pickMode && (
+				<div
+					className='pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'
+					style={{ zIndex: 1000 }}
+				>
+					<svg width='56' height='56' viewBox='0 0 56 56' aria-hidden>
+						<defs>
+							<filter id='shadow' x='-50%' y='-50%' width='200%' height='200%'>
+								<feDropShadow
+									dx='0'
+									dy='0'
+									stdDeviation='2'
+									floodColor='#000'
+									floodOpacity='0.25'
+								/>
+							</filter>
+						</defs>
+						<circle
+							cx='28'
+							cy='28'
+							r='16'
+							fill='rgba(255,255,255,0.85)'
+							stroke='#111827'
+							strokeWidth='2'
+							filter='url(#shadow)'
+						/>
+						<line
+							x1='28'
+							y1='2'
+							x2='28'
+							y2='54'
+							stroke='#111827'
+							strokeWidth='2'
+							strokeLinecap='round'
+						/>
+						<line
+							x1='2'
+							y1='28'
+							x2='54'
+							y2='28'
+							stroke='#111827'
+							strokeWidth='2'
+							strokeLinecap='round'
+						/>
+						<circle
+							cx='28'
+							cy='28'
+							r='4'
+							fill='#ef4444'
+							stroke='#ffffff'
+							strokeWidth='2'
+						/>
+					</svg>
+				</div>
+			)}
+		</div>
+	)
 }
