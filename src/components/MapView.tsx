@@ -5,7 +5,7 @@ import {
 	POLLUTION_TYPE_LABELS,
 } from '@/lib/constants'
 import { PollutionPoint } from '@/types/pollution'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 declare global {
 	interface Window {
@@ -49,7 +49,17 @@ interface YMapsNS {
 		props?: Record<string, unknown>,
 		options?: Record<string, unknown>
 	) => YPlacemark
+	Polygon: new (
+		geometry: number[][][],
+		props?: Record<string, unknown>,
+		options?: Record<string, unknown>
+	) => any
 	ready: (cb: () => void) => void
+}
+
+const CASPIAN_BOUNDS = {
+	southWest: [35.8, 46.3],
+	northEast: [48.5, 55.9],
 }
 
 function loadYandexApi(apiKey?: string): Promise<YMapsNS> {
@@ -80,9 +90,7 @@ export function MapView({
 	const onMapClickRef = useRef<typeof onMapClick>(onMapClick)
 	const onCenterChangeRef = useRef<typeof onCenterChange>(onCenterChange)
 	const pickModeRef = useRef<boolean | undefined>(pickMode)
-
-	// Включить/выключить пользовательские SVG-иконки
-	const useCustomIcons = true
+	const [alertVisible, setAlertVisible] = useState(false)
 
 	useEffect(() => {
 		onMapClickRef.current = onMapClick
@@ -100,33 +108,49 @@ export function MapView({
 					center: MAP_CENTER,
 					zoom: MAP_ZOOM,
 					controls: ['zoomControl'],
-					restrictMapArea: [
-						[-70, -180],
-						[75, 180],   
-					],
-				});
-				mapRef.current.options.set('minZoom', 4);
-				mapRef.current.options.set('maxZoom', 18);
+				})
+				mapRef.current.options.set('minZoom', 4)
+				mapRef.current.options.set('maxZoom', 18)
 
-				
-				mapRef.current.events.add('click', () => {
-					if (pickModeRef.current && mapRef.current && onMapClickRef.current) {
-						const center = mapRef.current.getCenter()
-						onMapClickRef.current(center[0], center[1])
+				// Добавляем визуальную зону Каспия
+				const caspianPolygon = new ymaps.Polygon(
+					[
+						[
+						CASPIAN_BOUNDS.southWest,
+						[CASPIAN_BOUNDS.southWest[0], CASPIAN_BOUNDS.northEast[1]],
+						CASPIAN_BOUNDS.northEast,
+						[CASPIAN_BOUNDS.northEast[0], CASPIAN_BOUNDS.southWest[1]],
+						CASPIAN_BOUNDS.southWest,
+						],
+					],
+					{},
+					{
+						fillColor: '#00bfff22',
+						strokeColor: '#00bfff',
+						strokeWidth: 2,
+						interactivityModel: 'default#transparent', // 🧩 не блокирует клики по карте
+					}
+					)
+					mapRef.current.geoObjects.add(caspianPolygon)
+				// Обработка кликов
+				mapRef.current.events.add('click', e => {
+					if (!pickModeRef.current || !onMapClickRef.current) return
+					const coords = e.get('coords') as [number, number]
+					const [lat, lng] = coords
+
+					const inCaspian =
+						lat >= CASPIAN_BOUNDS.southWest[0] &&
+						lat <= CASPIAN_BOUNDS.northEast[0] &&
+						lng >= CASPIAN_BOUNDS.southWest[1] &&
+						lng <= CASPIAN_BOUNDS.northEast[1]
+
+					if (inCaspian) {
+						onMapClickRef.current(lat, lng)
+					} else {
+						setAlertVisible(true)
+						setTimeout(() => setAlertVisible(false), 2500)
 					}
 				})
-
-				const emitCenter = () => {
-					if (!mapRef.current) return
-					if (!pickModeRef.current || !onCenterChangeRef.current) return
-					const c = mapRef.current.getCenter()
-					onCenterChangeRef.current(c[0], c[1])
-				}
-				emitCenter()
-				mapRef.current.events.add(
-					'boundschange',
-					emitCenter as unknown as (e: { get: (k: string) => unknown }) => void
-				)
 			})
 			.catch(() => {})
 
@@ -139,42 +163,7 @@ export function MapView({
 		}
 	}, [])
 
-	// Метка пользователя
-	useEffect(() => {
-		if (!mapRef.current || !window.navigator.geolocation) return
-
-		let userPlacemark: YPlacemark | null = null
-
-		navigator.geolocation.getCurrentPosition(
-			position => {
-				const { latitude, longitude } = position.coords
-				const ymaps = window.ymaps
-				if (!ymaps || !mapRef.current) return
-
-				userPlacemark = new ymaps.Placemark(
-					[latitude, longitude],
-					{ balloonContent: 'Вы здесь' },
-					{ preset: 'islands#blueCircleDotIcon' }
-				)
-				mapRef.current.geoObjects.add(userPlacemark)
-
-				if (!selectedPoint) {
-					mapRef.current.setCenter([latitude, longitude], 14, { duration: 200 })
-				}
-			},
-			err => {
-				console.warn('Геолокация недоступна или пользователь запретил доступ', err)
-			}
-		)
-
-		return () => {
-			if (mapRef.current && userPlacemark) {
-				mapRef.current.geoObjects.remove(userPlacemark)
-			}
-		}
-	}, [mapRef.current, selectedPoint])
-
-	// Отображение точек загрязнения
+	// Отображение меток загрязнения
 	useEffect(() => {
 		const ymaps = window.ymaps
 		if (!mapRef.current || !ymaps) return
@@ -215,14 +204,12 @@ export function MapView({
 			const pm = new ymaps.Placemark(
 				[point.latitude, point.longitude],
 				{ balloonContent: balloonHtml },
-				useCustomIcons
-					? {
-							iconLayout: 'default#image',
-							iconImageHref: 'data:image/svg+xml;base64,' + btoa(svgIcon),
-							iconImageSize: [32, 32],
-							iconImageOffset: [-16, -16],
-					  }
-					: { preset: 'islands#redDotIcon' }
+				{
+					iconLayout: 'default#image',
+					iconImageHref: 'data:image/svg+xml;base64,' + btoa(svgIcon),
+					iconImageSize: [32, 32],
+					iconImageOffset: [-16, -16],
+				}
 			)
 
 			pm.events.add('click', () => onPointSelect(point))
@@ -231,14 +218,15 @@ export function MapView({
 		})
 	}, [points, onPointSelect])
 
-	useEffect(() => {
-		if (!mapRef.current || !selectedPoint) return
-		mapRef.current.setCenter([selectedPoint.latitude, selectedPoint.longitude], 15, { duration: 200 })
-	}, [selectedPoint])
-
 	return (
 		<div className="relative h-full w-full rounded-lg border overflow-hidden">
 			<div ref={containerRef} className="absolute inset-0 h-full w-full" />
+
+			{alertVisible && (
+				<div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade">
+					Можно ставить метки только в пределах Каспийского моря 🌊
+				</div>
+			)}
 
 			{pickMode && (
 				<div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full z-40 flex flex-col items-center">

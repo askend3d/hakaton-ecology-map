@@ -22,6 +22,7 @@ import { PollutionPoint, PollutionType } from '@/types/pollution'
 import { Camera, MapPin, User } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import Cookies from 'js-cookie'
 
 interface AddPointDialogProps {
   open: boolean
@@ -73,6 +74,7 @@ export function AddPointDialog({ open, onOpenChange, onAdd, coords }: AddPointDi
         method: 'POST',
         body: payload,
         credentials: 'include', 
+        headers: { 'X-CSRFToken': Cookies.get('csrftoken') || '' },
       })
 
       if (!response.ok) {
