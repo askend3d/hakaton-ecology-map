@@ -5,7 +5,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { PollutionPoint, PollutionStatus, PollutionType } from "@/types/pollution";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,15 +14,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   POLLUTION_TYPE_LABELS,
   POLLUTION_TYPE_ICONS,
   POLLUTION_STATUS_LABELS,
 } from "@/lib/constants";
+import { PollutionPoint, PollutionStatus, PollutionType } from "@/types/pollution";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { MapPin, User, Calendar, Clock, HelpCircle } from "lucide-react";
+import {
+  MapPin,
+  User,
+  Calendar,
+  Clock,
+  HelpCircle,
+  MessageSquare,
+  ImagePlus,
+} from "lucide-react";
 import { toast } from "sonner";
+import { useEffect, useState } from "react";
+import Cookies from "js-cookie";
+
+interface Comment {
+  id: string;
+  text: string;
+  author: string;
+  photo_url?: string;
+  created_at: string;
+}
 
 interface PointDetailsSheetProps {
   point: PollutionPoint | null;
@@ -40,11 +59,36 @@ export function PointDetailsSheet({
   onStatusChange,
   isAdmin = false,
 }: PointDetailsSheetProps) {
-  if (!point) return null;
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [posting, setPosting] = useState(false);
 
-  // ✅ fallback-иконка, если тип не найден
-  const Icon = POLLUTION_TYPE_ICONS[point.pollution_type as PollutionType] || HelpCircle;
+    // 🔹 Загружаем комментарии при открытии
+    useEffect(() => {
+      if (open && point?.id) {
+        setLoadingComments(true);
+        fetch(`${import.meta.env.VITE_API_URL}/pollutions/points/${point.id}/comments/`, {
+          credentials: 'include',
+          headers: {
+            'X-CSRFToken': Cookies.get('csrftoken') || '',
+          },
+        })
+          .then((res) => {
+            if (!res.ok) throw new Error();
+            return res.json();
+          })
+          .then((data) => setComments(data))
+          .catch(() => toast.error("Не удалось загрузить комментарии"))
+          .finally(() => setLoadingComments(false))
+      }
+    }, [open, point?.id])
 
+  if (!point) return null
+  const Icon = POLLUTION_TYPE_ICONS[point.pollution_type as PollutionType] || HelpCircle
+  const latitude = point.latitude
+  const longitude = point.longitude
   const getStatusVariant = (status: string) => {
     switch (status) {
       case "new":
@@ -63,9 +107,46 @@ export function PointDetailsSheet({
     toast.success(`Статус изменен на "${POLLUTION_STATUS_LABELS[newStatus]}"`);
   };
 
-  // 🔹 Обеспечиваем поддержку разных названий координат (lat/lng или latitude/longitude)
-  const latitude = point.latitude;
-  const longitude = point.longitude;
+
+
+  // 🔹 Отправка комментария
+  const handleAddComment = async () => {
+    if (!newComment.trim() && !photo) {
+      return toast.error("Введите текст или добавьте фото");
+    }
+    if (!point) return;
+
+    setPosting(true);
+    const formData = new FormData();
+    formData.append("text", newComment);
+    if (photo) formData.append("photo", photo);
+
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/pollutions/points/${point.id}/comments/`,
+        {
+          method: "POST",
+          body: formData,
+          credentials: "include", // 👈 важно
+          headers: {
+            "X-CSRFToken": Cookies.get("csrftoken") || "", // 👈 тоже важно
+          },
+        }
+      );
+      
+
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+      setComments((prev) => [created, ...prev]);
+      setNewComment("");
+      setPhoto(null);
+      toast.success("Комментарий добавлен");
+    } catch {
+      toast.error("Ошибка при добавлении комментария");
+    } finally {
+      setPosting(false);
+    }
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -83,6 +164,7 @@ export function PointDetailsSheet({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
+          {/* --- Статус --- */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">Статус</span>
@@ -100,19 +182,18 @@ export function PointDetailsSheet({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {Object.entries(POLLUTION_STATUS_LABELS).map(
-                    ([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    )
-                  )}
+                <SelectContent>
+                  {Object.entries(POLLUTION_STATUS_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             )}
           </div>
 
+          {/* --- Описание --- */}
           <div>
             <h4 className="text-sm font-medium mb-2">Описание</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -120,44 +201,69 @@ export function PointDetailsSheet({
             </p>
           </div>
 
-          <div className="space-y-3 pt-4 border-t">
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Координаты:</span>
-              <span className="font-mono">
-                {latitude?.toFixed(4)}, {longitude?.toFixed(4)}
-              </span>
-            </div>
+          {/* --- Комментарии --- */}
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Комментарии
+            </h4>
 
-            <div className="flex items-center gap-2 text-sm">
-              <User className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Сообщил:</span>
-              <span>{point.anonymous_name || "Аноним"}</span>
-            </div>
-
-            <div className="flex items-center gap-2 text-sm">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Дата:</span>
-              <span>
-                {point.created_at
-                  ? format(new Date(point.created_at), "d MMMM yyyy", {
-                      locale: ru,
-                    })
-                  : "Дата не указана"}
-              </span>
-            </div>
-
-            {point.updatedAt && (
-              <div className="flex items-center gap-2 text-sm">
-                <Clock className="w-4 h-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Обновлено:</span>
-                <span>
-                  {format(new Date(point.updatedAt), "d MMMM yyyy", {
-                    locale: ru,
-                  })}
-                </span>
+            {loadingComments ? (
+              <p className="text-sm text-muted-foreground">Загрузка...</p>
+            ) : comments.length > 0 ? (
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {comments.map((comment) => (
+                  <div key={comment.id} className="border rounded-lg p-2 bg-muted/30">
+                    <p className="text-sm">{comment.text}</p>
+                    {comment.photo_url && (
+                      <img
+                        src={comment.photo_url}
+                        alt="Фото комментария"
+                        className="mt-2 rounded-md max-h-48 object-cover"
+                      />
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {comment.author} ·{" "}
+                      {format(new Date(comment.created_at), "d MMM yyyy", { locale: ru })}
+                    </p>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Комментариев пока нет</p>
             )}
+
+            {/* --- Добавление комментария --- */}
+            <div className="mt-4 flex flex-col gap-2">
+              <Input
+                placeholder="Введите комментарий..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+              />
+
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer text-muted-foreground">
+                  <ImagePlus className="w-4 h-4" />
+                  <span>Добавить фото</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setPhoto(file);
+                    }}
+                  />
+                </label>
+                {photo && (
+                  <span className="text-xs text-muted-foreground">{photo.name}</span>
+                )}
+              </div>
+
+              <Button onClick={handleAddComment} disabled={posting}>
+                {posting ? "Отправка..." : "Отправить"}
+              </Button>
+            </div>
           </div>
 
           <div className="pt-4 border-t">
@@ -166,8 +272,10 @@ export function PointDetailsSheet({
               className="w-full"
               onClick={() => {
                 if (latitude && longitude) {
-                  const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
-                  window.open(url, "_blank");
+                  window.open(
+                    `https://www.google.com/maps?q=${latitude},${longitude}`,
+                    "_blank"
+                  );
                 } else {
                   toast.error("Координаты отсутствуют");
                 }
