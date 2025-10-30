@@ -8,7 +8,7 @@ import {
 } from "@/lib/constants";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { MapPin, User, Calendar } from "lucide-react";
+import { MapPin, User, Calendar, HelpCircle } from "lucide-react";
 
 interface PollutionCardProps {
   point: PollutionPoint;
@@ -17,7 +17,8 @@ interface PollutionCardProps {
 }
 
 export function PollutionCard({ point, onClick, isSelected }: PollutionCardProps) {
-  const Icon = POLLUTION_TYPE_ICONS[point.type];
+  // ✅ Безопасно выбираем иконку — если нет, показываем HelpCircle
+  const Icon = POLLUTION_TYPE_ICONS[point.type] || HelpCircle;
   
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -46,10 +47,10 @@ export function PollutionCard({ point, onClick, isSelected }: PollutionCardProps
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3 className="font-semibold text-sm leading-tight">
-              {POLLUTION_TYPE_LABELS[point.type]}
+              {POLLUTION_TYPE_LABELS[point.pollution_type] || "Неизвестный тип"}
             </h3>
             <Badge variant={getStatusVariant(point.status)} className="shrink-0 text-xs">
-              {POLLUTION_STATUS_LABELS[point.status]}
+              {POLLUTION_STATUS_LABELS[point.status] || "?"}
             </Badge>
           </div>
           
@@ -60,15 +61,21 @@ export function PollutionCard({ point, onClick, isSelected }: PollutionCardProps
           <div className="space-y-1 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <MapPin className="w-3 h-3" />
-              <span>{point.lat.toFixed(4)}, {point.lng.toFixed(4)}</span>
+              <span>
+                {point.latitude?.toFixed(4)}, {point.longitude?.toFixed(4)}
+              </span>
             </div>
             <div className="flex items-center gap-1">
               <User className="w-3 h-3" />
-              <span>{point.reportedBy}</span>
+              <span>{point.anonymous_name || "Аноним"}</span>
             </div>
             <div className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
-              <span>{format(new Date(point.reportedAt), "d MMMM yyyy", { locale: ru })}</span>
+              <span>
+                {point.created_at
+                  ? format(new Date(point.created_at), "d MMMM yyyy", { locale: ru })
+                  : "Дата не указана"}
+              </span>
             </div>
           </div>
         </div>

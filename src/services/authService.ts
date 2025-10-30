@@ -1,61 +1,37 @@
 import axios from "axios"
+import Cookies from "js-cookie"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
-export interface User {
-	id: number
-	username: string
-	email: string
-	role: "admin" | "volunteer" | "guest"
-}
+axios.defaults.withCredentials = true // важно!
 
-export interface AuthResponse {
-	access: string
-	refresh: string
+export interface User {
+  id: number
+  username: string
+  email: string
+  role?: "admin" | "volunteer" | "guest"
 }
 
 export const authService = {
-	async register(username: string, email: string, password: string) {
-		const res = await axios.post(`${API_URL}/register/`, {
-			username,
-			email,
-			password,
-		})
-		return res.data
-	},
+  async register(username: string, email: string, password: string) {
+    await axios.post(`${API_URL}/users/register/`, { username, email, password }, { withCredentials: true })
+  },
 
-	async login(username: string, password: string): Promise<AuthResponse> {
-		const res = await axios.post(`${API_URL}/login/`, {
-			username,
-			password,
-		})
-		localStorage.setItem("access", res.data.access)
-		localStorage.setItem("refresh", res.data.refresh)
-		return res.data
-	},
+  async login(username: string, password: string) {
+    await axios.post(`${API_URL}/users/login/`, { username, password }, { withCredentials: true })
+  },
 
-	async logout() {
-		try {
-			await axios.post(`${API_URL}/logout/`)
-		} finally {
-			localStorage.removeItem("access")
-			localStorage.removeItem("refresh")
-			localStorage.removeItem("user")
-		}
-	},
+  async logout() {
+	const csrfToken = Cookies.get('csrftoken');
+    await axios.post(`${API_URL}/users/logout/`, {}, { withCredentials: true, headers: { 'X-CSRFToken': csrfToken } })
+  },
 
-	async getCurrentUser(): Promise<User | null> {
-		const token = localStorage.getItem("access")
-		if (!token) return null
-
-		try {
-			const res = await axios.get(`${API_URL}/me/`, {
-				headers: { Authorization: `Bearer ${token}` },
-			})
-			localStorage.setItem("user", JSON.stringify(res.data))
-			return res.data
-		} catch (e) {
-			return null
-		}
-	},
+  async getCurrentUser(): Promise<User | null> {
+    try {
+      const res = await axios.get(`${API_URL}/users/me/`, { withCredentials: true })
+      return res.data
+    } catch {
+      return null
+    }
+  },
 }

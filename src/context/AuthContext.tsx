@@ -16,19 +16,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const init = async () => {
+    const loadUser = async () => {
       const u = await authService.getCurrentUser()
       setUser(u)
       setLoading(false)
     }
-    init()
+    loadUser()
   }, [])
 
   const login = async (username: string, password: string) => {
-    await authService.login(username, password)
-    const u = await authService.getCurrentUser()
-    setUser(u)
-  }
+  await authService.login(username, password)
+  const u = await authService.getCurrentUser()
+  setUser(u)
+}
+
 
   const register = async (username: string, email: string, password: string) => {
     await authService.register(username, email, password)

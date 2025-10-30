@@ -1,7 +1,7 @@
 export type PollutionType = 
-  | "household_waste"
-  | "industrial_waste"
-  | "oil_spill"
+  | "trash"
+  | "industrial"
+  | "oil"
   | "plastic"
   | "chemical"
   | "other";
@@ -10,14 +10,14 @@ export type PollutionStatus = "new" | "in_progress" | "cleaned";
 
 export interface PollutionPoint {
   id: string;
-  lat: number;
-  lng: number;
+  latitude: number;
+  longitude: number;
   type: PollutionType;
   status: PollutionStatus;
   description: string;
   photo?: File;
-  reportedBy: string;
-  reportedAt: Date;
+  anonymous_name: string;
+  created_at: Date;
   updatedAt?: Date;
 }
 

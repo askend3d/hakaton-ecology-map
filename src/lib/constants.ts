@@ -9,9 +9,9 @@ import {
 } from 'lucide-react'
 
 export const POLLUTION_TYPE_LABELS: Record<PollutionType, string> = {
-	household_waste: 'Бытовой мусор',
-	industrial_waste: 'Промышленные отходы',
-	oil_spill: 'Нефтяное пятно',
+	trash: 'Бытовой мусор',
+	industrial: 'Промышленные отходы',
+	oil: 'Нефтяное пятно',
 	plastic: 'Пластик',
 	chemical: 'Химикаты',
 	other: 'Другое',
@@ -21,9 +21,9 @@ export const POLLUTION_TYPE_ICONS: Record<
 	PollutionType,
 	import('lucide-react').LucideIcon
 > = {
-	household_waste: Trash2,
-	industrial_waste: Factory,
-	oil_spill: Droplet,
+	trash: Trash2,
+	industrial: Factory,
+	oil: Droplet,
 	plastic: Recycle,
 	chemical: Beaker,
 	other: AlertCircle,

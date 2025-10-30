@@ -67,6 +67,7 @@ export default function RegisterPage() {
               required
               className="py-3 text-base"
             />
+          
             <Input
               type="email"
               placeholder="Email"

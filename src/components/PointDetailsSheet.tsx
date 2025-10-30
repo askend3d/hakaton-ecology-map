@@ -5,7 +5,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { PollutionPoint, PollutionStatus } from "@/types/pollution";
+import { PollutionPoint, PollutionStatus, PollutionType } from "@/types/pollution";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,7 @@ import {
 } from "@/lib/constants";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { MapPin, User, Calendar, Clock } from "lucide-react";
+import { MapPin, User, Calendar, Clock, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 
 interface PointDetailsSheetProps {
@@ -42,7 +42,8 @@ export function PointDetailsSheet({
 }: PointDetailsSheetProps) {
   if (!point) return null;
 
-  const Icon = POLLUTION_TYPE_ICONS[point.type];
+  // ✅ fallback-иконка, если тип не найден
+  const Icon = POLLUTION_TYPE_ICONS[point.pollution_type as PollutionType] || HelpCircle;
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -62,6 +63,10 @@ export function PointDetailsSheet({
     toast.success(`Статус изменен на "${POLLUTION_STATUS_LABELS[newStatus]}"`);
   };
 
+  // 🔹 Обеспечиваем поддержку разных названий координат (lat/lng или latitude/longitude)
+  const latitude = point.latitude;
+  const longitude = point.longitude;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
@@ -70,7 +75,7 @@ export function PointDetailsSheet({
             <div className="p-2 rounded-lg bg-primary/10">
               <Icon className="w-5 h-5 text-primary" />
             </div>
-            {POLLUTION_TYPE_LABELS[point.type]}
+            {POLLUTION_TYPE_LABELS[point.pollution_type] || "Неизвестный тип"}
           </SheetTitle>
           <SheetDescription>
             Подробная информация о точке загрязнения
@@ -82,23 +87,27 @@ export function PointDetailsSheet({
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">Статус</span>
               <Badge variant={getStatusVariant(point.status)}>
-                {POLLUTION_STATUS_LABELS[point.status]}
+                {POLLUTION_STATUS_LABELS[point.status] || "Неизвестно"}
               </Badge>
             </div>
             {isAdmin && (
               <Select
                 value={point.status}
-                onValueChange={(value) => handleStatusChange(value as PollutionStatus)}
+                onValueChange={(value) =>
+                  handleStatusChange(value as PollutionStatus)
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  {Object.entries(POLLUTION_STATUS_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
+                  {Object.entries(POLLUTION_STATUS_LABELS).map(
+                    ([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
             )}
@@ -107,7 +116,7 @@ export function PointDetailsSheet({
           <div>
             <h4 className="text-sm font-medium mb-2">Описание</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              {point.description}
+              {point.description || "Описание отсутствует"}
             </p>
           </div>
 
@@ -115,26 +124,38 @@ export function PointDetailsSheet({
             <div className="flex items-center gap-2 text-sm">
               <MapPin className="w-4 h-4 text-muted-foreground" />
               <span className="text-muted-foreground">Координаты:</span>
-              <span className="font-mono">{point.lat.toFixed(4)}, {point.lng.toFixed(4)}</span>
+              <span className="font-mono">
+                {latitude?.toFixed(4)}, {longitude?.toFixed(4)}
+              </span>
             </div>
 
             <div className="flex items-center gap-2 text-sm">
               <User className="w-4 h-4 text-muted-foreground" />
               <span className="text-muted-foreground">Сообщил:</span>
-              <span>{point.reportedBy}</span>
+              <span>{point.anonymous_name || "Аноним"}</span>
             </div>
 
             <div className="flex items-center gap-2 text-sm">
               <Calendar className="w-4 h-4 text-muted-foreground" />
               <span className="text-muted-foreground">Дата:</span>
-              <span>{format(new Date(point.reportedAt), "d MMMM yyyy", { locale: ru })}</span>
+              <span>
+                {point.created_at
+                  ? format(new Date(point.created_at), "d MMMM yyyy", {
+                      locale: ru,
+                    })
+                  : "Дата не указана"}
+              </span>
             </div>
 
             {point.updatedAt && (
               <div className="flex items-center gap-2 text-sm">
                 <Clock className="w-4 h-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Обновлено:</span>
-                <span>{format(new Date(point.updatedAt), "d MMMM yyyy", { locale: ru })}</span>
+                <span>
+                  {format(new Date(point.updatedAt), "d MMMM yyyy", {
+                    locale: ru,
+                  })}
+                </span>
               </div>
             )}
           </div>
@@ -144,8 +165,12 @@ export function PointDetailsSheet({
               variant="outline"
               className="w-full"
               onClick={() => {
-                const url = `https://www.google.com/maps?q=${point.lat},${point.lng}`;
-                window.open(url, "_blank");
+                if (latitude && longitude) {
+                  const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                  window.open(url, "_blank");
+                } else {
+                  toast.error("Координаты отсутствуют");
+                }
               }}
             >
               <MapPin className="w-4 h-4 mr-2" />

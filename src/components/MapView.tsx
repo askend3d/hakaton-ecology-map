@@ -17,9 +17,9 @@ interface MapViewProps {
 	points: PollutionPoint[]
 	onPointSelect: (point: PollutionPoint) => void
 	selectedPoint?: PollutionPoint | null
-	onMapClick?: (lat: number, lng: number) => void
+	onMapClick?: (latitude: number, longitude: number) => void
 	pickMode?: boolean
-	onCenterChange?: (lat: number, lng: number) => void
+	onCenterChange?: (latitude: number, longitude: number) => void
 }
 
 interface YMapEventsApi {
@@ -213,7 +213,7 @@ export function MapView({
 			`
 
 			const pm = new ymaps.Placemark(
-				[point.lat, point.lng],
+				[point.latitude, point.longitude],
 				{ balloonContent: balloonHtml },
 				useCustomIcons
 					? {
@@ -233,7 +233,7 @@ export function MapView({
 
 	useEffect(() => {
 		if (!mapRef.current || !selectedPoint) return
-		mapRef.current.setCenter([selectedPoint.lat, selectedPoint.lng], 15, { duration: 200 })
+		mapRef.current.setCenter([selectedPoint.latitude, selectedPoint.longitude], 15, { duration: 200 })
 	}, [selectedPoint])
 
 	return (
