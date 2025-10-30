@@ -45,7 +45,6 @@ export function AddPointDialog({
 		photo: null as File | null,
 	})
 
-	// Если пришли координаты с карты — подставляем их в форму
 	useEffect(() => {
 		if (!coords) return
 		const nextLat = String(coords.lat)
@@ -75,6 +74,7 @@ export function AddPointDialog({
 			type: formData.type,
 			description: formData.description,
 			reportedBy: formData.reportedBy,
+			photo: formData.photo,
 			status: 'new',
 			reportedAt: new Date(),
 		})
@@ -95,7 +95,7 @@ export function AddPointDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className='sm:max-w-[500px] max-h-[90vh] overflow-y-auto'>
+			<DialogContent className='sm:max-w-[500px] max-h-[90vh] overflow-y-hidden'>
 				<DialogHeader>
 					<DialogTitle>Добавить точку загрязнения</DialogTitle>
 					<DialogDescription>
@@ -112,7 +112,6 @@ export function AddPointDialog({
 							</Label>
 							<Input
 								id='lat'
-								type='number'
 								step='any'
 								placeholder='43.656'
 								value={formData.lat}
@@ -129,7 +128,6 @@ export function AddPointDialog({
 							</Label>
 							<Input
 								id='lng'
-								type='number'
 								step='any'
 								placeholder='51.169'
 								value={formData.lng}

@@ -40,3 +40,61 @@
 .read-the-docs {
   color: #888;
 }
+
+
+/* Фоновое изображение + градиент */
+.bg-clean-sea {
+  background: linear-gradient(to bottom, rgba(160, 233, 255, 0.8), rgba(255,255,255,0.8));
+  background-size: cover;
+  background-position: center;
+  animation: waves 10s linear infinite;
+}
+
+/* Анимация лёгких волн (движение фонового изображения) */
+@keyframes waves {
+  0% { background-position: center top; }
+  50% { background-position: center 10px; }
+  100% { background-position: center top; }
+}
+
+/* Карточка регистрации/входа */
+/* Карточка регистрации/входа с выделением на фоне */
+.card-blur {
+  background-color: rgba(255, 255, 255, 0.8) !important; /* светлый полупрозрачный фон */
+  border-radius: 12px; /* скругление углов */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* лёгкая тень */
+  padding: 2rem; /* внутренние отступы */
+  backdrop-filter: blur(8px); /* размытие заднего фона через стекло */
+}
+
+
+.card-blur:hover {
+  transform: translateY(-5px); /* лёгкий lift при наведении */
+}
+
+/* Input с фокусом */
+.input-field {
+  transition: all 0.2s ease-in-out;
+}
+.input-field:focus {
+  outline: none;
+  border-color: #00b894;
+  box-shadow: 0 0 6px #00b894;
+}
+
+/* Кнопка */
+.button-green {
+  background-color: #00b894;
+  color: white;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.button-green:hover {
+  background-color: #00976c;
+}
+
+/* Ссылки */
+.text-link {
+  color: #0077b6;
+  text-decoration: underline;
+}

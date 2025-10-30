@@ -7,6 +7,12 @@ import {
 import { PollutionPoint } from '@/types/pollution'
 import { useEffect, useRef } from 'react'
 
+declare global {
+	interface Window {
+		ymaps?: YMapsNS
+	}
+}
+
 interface MapViewProps {
 	points: PollutionPoint[]
 	onPointSelect: (point: PollutionPoint) => void
@@ -16,17 +22,8 @@ interface MapViewProps {
 	onCenterChange?: (lat: number, lng: number) => void
 }
 
-declare global {
-	interface Window {
-		ymaps?: YMapsNS
-	}
-}
-
 interface YMapEventsApi {
-	add: (
-		name: string,
-		cb: (e: { get: (key: string) => unknown }) => void
-	) => void
+	add: (name: string, cb: (e: { get: (key: string) => unknown }) => void) => void
 }
 interface YMapGeoObjectsApi {
 	add: (obj: YPlacemark) => void
@@ -69,8 +66,6 @@ function loadYandexApi(apiKey?: string): Promise<YMapsNS> {
 	})
 }
 
-// Убрали Leaflet-иконки (переход на Яндекс.Карты)
-
 export function MapView({
 	points,
 	onPointSelect,
@@ -86,19 +81,18 @@ export function MapView({
 	const onCenterChangeRef = useRef<typeof onCenterChange>(onCenterChange)
 	const pickModeRef = useRef<boolean | undefined>(pickMode)
 
-	// Держим актуальные колбэки/флаги в ref, чтобы не перевешивать события
+	// Включить/выключить пользовательские SVG-иконки
+	const useCustomIcons = true
+
 	useEffect(() => {
 		onMapClickRef.current = onMapClick
 		onCenterChangeRef.current = onCenterChange
 		pickModeRef.current = pickMode
 	}, [onMapClick, onCenterChange, pickMode])
 
-	// Инициализация карты и однократная регистрация обработчиков
 	useEffect(() => {
 		let unmounted = false
-		const apiKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY as
-			| string
-			| undefined
+		const apiKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY as string | undefined
 		loadYandexApi(apiKey)
 			.then(ymaps => {
 				if (unmounted || !containerRef.current) return
@@ -108,23 +102,19 @@ export function MapView({
 					controls: ['zoomControl'],
 				})
 
-				// Один раз вешаем обработчик клика по карте
-        mapRef.current.events.add('click', () => {
-          if (pickModeRef.current && mapRef.current && onMapClickRef.current) {
-            const center = mapRef.current.getCenter()
-            onMapClickRef.current(center[0], center[1])
-          }
-        })
-        
+				mapRef.current.events.add('click', () => {
+					if (pickModeRef.current && mapRef.current && onMapClickRef.current) {
+						const center = mapRef.current.getCenter()
+						onMapClickRef.current(center[0], center[1])
+					}
+				})
 
-				// Один раз вешаем обработчик изменения границ (для прицела)
 				const emitCenter = () => {
 					if (!mapRef.current) return
 					if (!pickModeRef.current || !onCenterChangeRef.current) return
 					const c = mapRef.current.getCenter()
 					onCenterChangeRef.current(c[0], c[1])
 				}
-				// Сразу сообщаем центр, если включён pickMode
 				emitCenter()
 				mapRef.current.events.add(
 					'boundschange',
@@ -142,111 +132,114 @@ export function MapView({
 		}
 	}, [])
 
-	// Обновление маркеров
+	// Метка пользователя
+	useEffect(() => {
+		if (!mapRef.current || !window.navigator.geolocation) return
+
+		let userPlacemark: YPlacemark | null = null
+
+		navigator.geolocation.getCurrentPosition(
+			position => {
+				const { latitude, longitude } = position.coords
+				const ymaps = window.ymaps
+				if (!ymaps || !mapRef.current) return
+
+				userPlacemark = new ymaps.Placemark(
+					[latitude, longitude],
+					{ balloonContent: 'Вы здесь' },
+					{ preset: 'islands#blueCircleDotIcon' }
+				)
+				mapRef.current.geoObjects.add(userPlacemark)
+
+				if (!selectedPoint) {
+					mapRef.current.setCenter([latitude, longitude], 14, { duration: 200 })
+				}
+			},
+			err => {
+				console.warn('Геолокация недоступна или пользователь запретил доступ', err)
+			}
+		)
+
+		return () => {
+			if (mapRef.current && userPlacemark) {
+				mapRef.current.geoObjects.remove(userPlacemark)
+			}
+		}
+	}, [mapRef.current, selectedPoint])
+
+	// Отображение точек загрязнения
 	useEffect(() => {
 		const ymaps = window.ymaps
 		if (!mapRef.current || !ymaps) return
 
-		placemarksRef.current.forEach(p => p && mapRef.current.geoObjects.remove(p))
+		placemarksRef.current.forEach(p => mapRef.current!.geoObjects.remove(p))
 		placemarksRef.current = []
 
-		const statusPreset: Record<string, string> = {
-			new: 'islands#redDotIcon',
-			in_progress: 'islands#orangeDotIcon',
-			cleaned: 'islands#greenDotIcon',
+		const colorByStatus: Record<string, string> = {
+			new: '#ef4444',
+			in_progress: '#f59e0b',
+			cleaned: '#22c55e',
 		}
 
 		points.forEach(point => {
+			const color = colorByStatus[point.status] || '#3b82f6'
+
+			const svgIcon = `
+				<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">
+					<circle cx="16" cy="16" r="10" fill="${color}" stroke="white" stroke-width="3"/>
+					<circle cx="16" cy="16" r="4" fill="white"/>
+				</svg>
+			`
+
+			const balloonHtml = `
+				<div style="min-width:200px">
+					<div style="font-weight:600;margin-bottom:8px">
+						${POLLUTION_TYPE_LABELS[point.type]}
+					</div>
+					<div style="display:inline-block;padding:2px 8px;border-radius:4px;margin-bottom:8px;background:${color}22;color:${color}">
+						${POLLUTION_STATUS_LABELS[point.status]}
+					</div>
+					<p style="color:#6b7280;margin-top:8px;font-size:12px">
+						${point.description}
+					</p>
+				</div>
+			`
+
 			const pm = new ymaps.Placemark(
 				[point.lat, point.lng],
-				{
-					balloonContent: `
-                        <div style="min-width:200px">
-                          <div style="font-weight:600;margin-bottom:8px">${
-														POLLUTION_TYPE_LABELS[point.type]
-													}</div>
-                          <div style="display:inline-block;padding:2px 8px;border-radius:4px;margin-bottom:8px;background:#fef2f2;color:#991b1b">${
-														POLLUTION_STATUS_LABELS[point.status]
-													}</div>
-                          <p style="color:#6b7280;margin-top:8px;font-size:12px">${
-														point.description
-													}</p>
-                        </div>
-                    `,
-				},
-				{ preset: statusPreset[point.status] || 'islands#blueDotIcon' }
+				{ balloonContent: balloonHtml },
+				useCustomIcons
+					? {
+							iconLayout: 'default#image',
+							iconImageHref: 'data:image/svg+xml;base64,' + btoa(svgIcon),
+							iconImageSize: [32, 32],
+							iconImageOffset: [-16, -16],
+					  }
+					: { preset: 'islands#redDotIcon' }
 			)
+
 			pm.events.add('click', () => onPointSelect(point))
 			mapRef.current.geoObjects.add(pm)
 			placemarksRef.current.push(pm)
 		})
 	}, [points, onPointSelect])
 
-	// Перелёт к выбранной точке
+	// Центрирование на выбранной точке
 	useEffect(() => {
 		if (!mapRef.current || !selectedPoint) return
-		mapRef.current.setCenter([selectedPoint.lat, selectedPoint.lng], 15, {
-			duration: 200,
-		})
+		mapRef.current.setCenter([selectedPoint.lat, selectedPoint.lng], 15, { duration: 200 })
 	}, [selectedPoint])
 
 	return (
-		<div className='relative h-full w-full rounded-lg border overflow-hidden'>
-			<div ref={containerRef} className='absolute inset-0 h-full w-full' />
-			{/* Crosshair is always at container center */}
+		<div className="relative h-full w-full rounded-lg border overflow-hidden">
+			<div ref={containerRef} className="absolute inset-0 h-full w-full" />
+
 			{pickMode && (
-				<div
-					className='pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'
-					style={{ zIndex: 1000 }}
-				>
-					<svg width='56' height='56' viewBox='0 0 56 56' aria-hidden>
-						<defs>
-							<filter id='shadow' x='-50%' y='-50%' width='200%' height='200%'>
-								<feDropShadow
-									dx='0'
-									dy='0'
-									stdDeviation='2'
-									floodColor='#000'
-									floodOpacity='0.25'
-								/>
-							</filter>
-						</defs>
-						<circle
-							cx='28'
-							cy='28'
-							r='16'
-							fill='rgba(255,255,255,0.85)'
-							stroke='#111827'
-							strokeWidth='2'
-							filter='url(#shadow)'
-						/>
-						<line
-							x1='28'
-							y1='2'
-							x2='28'
-							y2='54'
-							stroke='#111827'
-							strokeWidth='2'
-							strokeLinecap='round'
-						/>
-						<line
-							x1='2'
-							y1='28'
-							x2='54'
-							y2='28'
-							stroke='#111827'
-							strokeWidth='2'
-							strokeLinecap='round'
-						/>
-						<circle
-							cx='28'
-							cy='28'
-							r='4'
-							fill='#ef4444'
-							stroke='#ffffff'
-							strokeWidth='2'
-						/>
-					</svg>
+				<div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full z-40 flex flex-col items-center">
+					<div className="relative">
+						<div className="w-6 h-6 bg-red-500 rounded-full border-4 border-white shadow-lg animate-bounce" />
+						<div className="absolute left-1/2 top-full -translate-x-1/2 w-2 h-2 bg-gray-400 rounded-full opacity-70" />
+					</div>
 				</div>
 			)}
 		</div>

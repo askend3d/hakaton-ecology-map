@@ -5,15 +5,16 @@ import { PointDetailsSheet } from '@/components/PointDetailsSheet'
 import { PollutionCard } from '@/components/PollutionCard'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useAuth } from '@/context/AuthContext'
 import { mockPollutionPoints } from '@/lib/mockData'
 import {
 	PollutionPoint,
 	PollutionStatus,
 	PollutionType,
 } from '@/types/pollution'
-import { List, MapIcon, Plus, Shield } from 'lucide-react'
+import { List, MapIcon, Shield } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
 
 const Index = () => {
 	const [points, setPoints] = useState<PollutionPoint[]>(mockPollutionPoints)
@@ -28,6 +29,7 @@ const Index = () => {
 		lat: number
 		lng: number
 	} | null>(null)
+	const { user, loading } = useAuth()
 
 	// Filters
 	const [selectedTypes, setSelectedTypes] = useState<PollutionType[]>([])
@@ -35,7 +37,7 @@ const Index = () => {
 		[]
 	)
 	const [searchQuery, setSearchQuery] = useState('')
-
+	const navigate = useNavigate();
 	const filteredPoints = useMemo(() => {
 		return points.filter(point => {
 			const matchesType =
@@ -49,6 +51,8 @@ const Index = () => {
 		})
 	}, [points, selectedTypes, selectedStatuses, searchQuery])
 
+	if (loading) return <div className='text-center p-10'>Загрузка...</div>
+
 	const handleAddPoint = (data: Omit<PollutionPoint, 'id'>) => {
 		const newPoint: PollutionPoint = {
 			...data,
@@ -56,6 +60,7 @@ const Index = () => {
 		}
 		setPoints([...points, newPoint])
 		setPickedCoords(null)
+		console.log(newPoint)
 	}
 
 	const handleStatusChange = (id: string, status: PollutionStatus) => {
@@ -80,7 +85,6 @@ const Index = () => {
 
 	return (
 		<div className='min-h-screen bg-background'>
-			{/* Header */}
 			<header className='border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50'>
 				<div className='container mx-auto px-4 py-4'>
 					<div className='flex items-center justify-between'>
@@ -97,25 +101,26 @@ const Index = () => {
 						</div>
 						<div className='flex items-center gap-2'>
 							<Button
-								variant={isAdmin ? 'default' : 'outline'}
+								variant={user?.role === 'admin' ? 'default' : 'outline'}
 								size='sm'
-								onClick={() => {
-									setIsAdmin(!isAdmin)
-									toast.success(
-										isAdmin
-											? 'Режим администратора выключен'
-											: 'Режим администратора включен'
-									)
-								}}
 							>
 								<Shield className='w-4 h-4 mr-2' />
-								{isAdmin ? 'Администратор' : 'Волонтер'}
+								{user?.role === 'admin'
+									? 'Администратор'
+									: user?.role === 'volunteer'
+									? 'Волонтер'
+									: 'Гость'}
 							</Button>
-							<Button onClick={() => setShowAddDialog(true)} size='sm'>
-								<Plus className='w-4 h-4 mr-2' />
-								Добавить точку
+							<Button
+								variant='outline'
+								size='sm'
+								onClick={() => navigate('/register')}
+							>
+								Войти
 							</Button>
+							
 						</div>
+						
 					</div>
 
 					{/* Stats */}

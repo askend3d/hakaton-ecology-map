@@ -15,7 +15,7 @@ export interface PollutionPoint {
   type: PollutionType;
   status: PollutionStatus;
   description: string;
-  photo?: string;
+  photo?: File;
   reportedBy: string;
   reportedAt: Date;
   updatedAt?: Date;
