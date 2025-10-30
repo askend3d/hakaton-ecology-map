@@ -100,7 +100,7 @@ const Index = () => {
 							</div>
 						</div>
 						<div className='flex items-center gap-2'>
-							<Button
+							{/* <Button
 								variant={user?.role === 'admin' ? 'default' : 'outline'}
 								size='sm'
 							>
@@ -110,7 +110,7 @@ const Index = () => {
 									: user?.role === 'volunteer'
 									? 'Волонтер'
 									: 'Гость'}
-							</Button>
+							</Button> */}
 							<Button
 								variant='outline'
 								size='sm'

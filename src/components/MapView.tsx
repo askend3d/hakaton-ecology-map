@@ -100,8 +100,15 @@ export function MapView({
 					center: MAP_CENTER,
 					zoom: MAP_ZOOM,
 					controls: ['zoomControl'],
-				})
+					restrictMapArea: [
+						[-70, -180],
+						[75, 180],   
+					],
+				});
+				mapRef.current.options.set('minZoom', 4);
+				mapRef.current.options.set('maxZoom', 18);
 
+				
 				mapRef.current.events.add('click', () => {
 					if (pickModeRef.current && mapRef.current && onMapClickRef.current) {
 						const center = mapRef.current.getCenter()
@@ -224,7 +231,6 @@ export function MapView({
 		})
 	}, [points, onPointSelect])
 
-	// Центрирование на выбранной точке
 	useEffect(() => {
 		if (!mapRef.current || !selectedPoint) return
 		mapRef.current.setCenter([selectedPoint.lat, selectedPoint.lng], 15, { duration: 200 })

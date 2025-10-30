@@ -1,93 +1,93 @@
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { useAuth } from '@/context/AuthContext'
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import BgImage from '../../public/caspian-shore.jpg'
+import { ArrowLeft } from 'lucide-react'
 
-const LoginPage: React.FC = () => {
-	const { login } = useAuth()
-	const navigate = useNavigate()
-	const [username, setUsername] = useState('')
-	const [password, setPassword] = useState('')
-	const [error, setError] = useState<string | null>(null)
-	const [loading, setLoading] = useState(false)
+export default function LoginPage() {
+  const { login } = useAuth()
+  const navigate = useNavigate()
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault()
-		setLoading(true)
-		setError(null)
-		try {
-			await login(username, password)
-			navigate('/')
-		} catch {
-			setError('Неверное имя пользователя или пароль')
-		} finally {
-			setLoading(false)
-		}
-	}
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      await login(username, password)
+      navigate('/')
+    } catch {
+      setError('Неверное имя пользователя или пароль')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-	return (
-		<div
-			className='min-h-screen flex items-center justify-center'
-			style={{
-				background: `linear-gradient(to bottom, rgba(160, 233, 255, 0.8), rgba(255,255,255,0.8)), url(${BgImage})`,
-				backgroundSize: 'cover',
-				backgroundPosition: 'center',
-			}}
-		>
-			<div
-				className='w-full max-w-md card-blur backdrop-blur-lg  p-6'
-				style={{ borderRadius: 10, border: '2px solid black' }}
-			>
-				<h2
-					className='text-3xl font-bold mb-6 text-center'
-					style={{
-						color: '#10b5cb',
-					}}
-				>
-					Вход
-				</h2>
-				<form onSubmit={handleSubmit} className='space-y-4'>
-					<div>
-				
-					
-						<input
-							type='text'
-							placeholder='Имя пользователя'
-							className='w-full p-2 border border-gray-300 rounded input-field'
-							value={username}
-							onChange={e => setUsername(e.target.value)}
-							required
-						/>
-					</div>
-					<div>
-						<input
-							type='password'
-							placeholder='Пароль'
-							className='w-full p-2 border border-gray-300 rounded input-field'
-							value={password}
-							onChange={e => setPassword(e.target.value)}
-							required
-						/>
-					</div>
-					{error && <p className='text-red-500 text-sm'>{error}</p>}
-					<Button
-						type='submit'
-						className='w-full button-green'
-						disabled={loading}
-					>
-						{loading ? 'Вход...' : 'Войти'}
-					</Button>
-				</form>
-				<p className='mt-4 text-sm text-center text-gray-700'>
-					Нет аккаунта?{' '}
-					<Link to='/register' className='text-link'>
-						Зарегистрироваться
-					</Link>
-				</p>
-			</div>
-		</div>
-	)
+  return (
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      {/* фон */}
+      <div className="absolute inset-0 bg-gradient-to-b from-cyan-100 via-white to-sky-200" />
+      <div className="absolute inset-0 backdrop-blur-[100px] opacity-60" />
+      <div className="absolute top-20 left-1/4 w-96 h-96 bg-cyan-200/30 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-sky-300/30 rounded-full blur-3xl animate-pulse" />
+
+      <Card className="relative w-full max-w-md shadow-lg border border-border/50 bg-white/75 backdrop-blur-md p-2">
+        <CardHeader className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="flex items-center text-cyan-700 hover:text-cyan-800 transition text-sm font-medium w-fit"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Назад
+          </button>
+          <CardTitle className="text-2xl font-bold text-center text-cyan-800">
+            Вход в систему
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <Input
+              type="text"
+              placeholder="Имя пользователя"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              required
+              className="py-3 text-base"
+            />
+            <Input
+              type="password"
+              placeholder="Пароль"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              className="py-3 text-base"
+            />
+            {error && (
+              <p className="text-red-500 text-sm text-center">{error}</p>
+            )}
+            <Button
+              type="submit"
+              className="w-full py-3 text-base bg-cyan-600 hover:bg-cyan-700 text-white font-semibold"
+              disabled={loading}
+            >
+              {loading ? 'Вход...' : 'Войти'}
+            </Button>
+          </form>
+          <p className="mt-5 text-sm text-center text-gray-700">
+            Нет аккаунта?{' '}
+            <Link to="/register" className="text-cyan-700 hover:underline">
+              Зарегистрироваться
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
-
-export default LoginPage
