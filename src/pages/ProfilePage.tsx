@@ -26,41 +26,41 @@ export default function ProfilePage() {
 
 
 	const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0]
-		if (!file) return
-
-		const formData = new FormData()
-		formData.append('photo', file)
-
-		try {
-			setUploading(true)
-
-			const response = await fetch(
-				`${import.meta.env.VITE_API_URL}/users/upload-photo/`,
-				{
-					method: 'POST',
-					body: formData,
-					credentials: 'include', // чтобы cookie сессии и csrftoken отправились
-					headers: {
-						'X-CSRFToken': Cookies.get('csrftoken') || '',
-					},
-				}
-			)
-
-			if (!response.ok) {
-				console.error('Ошибка при загрузке:', await response.text())
-				return
-			}
-
-			// После успешной загрузки — обновить user (если есть refreshUser)
-			// await refreshUser()
-		} catch (err) {
-			console.error('Ошибка при загрузке аватарки:', err)
-		} finally {
-			setUploading(false)
-		}
-	}
-
+    const file = e.target.files?.[0]
+    if (!file) return
+  
+    // мгновенное превью
+    setAvatar(URL.createObjectURL(file))
+  
+    const formData = new FormData()
+    formData.append('photo', file)
+  
+    try {
+      setUploading(true)
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/users/upload-photo/`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+        headers: { 'X-CSRFToken': Cookies.get('csrftoken') || '' },
+      })
+  
+      if (!response.ok) {
+        console.error('Ошибка при загрузке:', await response.text())
+        return
+      }
+  
+      // 🔄 ключевое: подтянуть свежего пользователя
+      await refreshUser()
+  
+      // сбросить blob, чтобы показать серверный URL (не обязательно)
+      setAvatar(null)
+    } catch (err) {
+      console.error('Ошибка при загрузке аватарки:', err)
+    } finally {
+      setUploading(false)
+    }
+  }
+  
 	return (
 		<div className='min-h-screen bg-gradient-to-b from-sky-50 via-cyan-50 to-sky-100 text-gray-800 relative overflow-hidden'>
 			{/* Волны и фон */}

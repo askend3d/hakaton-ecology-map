@@ -7,6 +7,7 @@ type AuthContextType = {
   login: (username: string, password: string) => Promise<void>
   register: (username: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  refreshUser: () => Promise<void>  // 👈 добавили сюда
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -15,34 +16,61 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Загружаем пользователя при монтировании
   useEffect(() => {
     const loadUser = async () => {
-      const u = await authService.getCurrentUser()
-      setUser(u)
-      setLoading(false)
+      try {
+        const u = await authService.getCurrentUser()
+        setUser(u)
+      } catch (err) {
+        console.error('Ошибка при загрузке пользователя:', err)
+      } finally {
+        setLoading(false)
+      }
     }
     loadUser()
   }, [])
 
+  // 🔹 Авторизация
   const login = async (username: string, password: string) => {
-  await authService.login(username, password)
-  const u = await authService.getCurrentUser()
-  setUser(u)
-}
+    await authService.login(username, password)
+    const u = await authService.getCurrentUser()
+    setUser(u)
+  }
 
-
+  // 🔹 Регистрация
   const register = async (username: string, email: string, password: string) => {
     await authService.register(username, email, password)
     await login(username, password)
   }
 
+  // 🔹 Выход
   const logout = async () => {
     await authService.logout()
     setUser(null)
   }
 
+  // 🔹 Обновление данных пользователя (например, после апдейта профиля или аватара)
+  const refreshUser = async () => {
+    try {
+      const updatedUser = await authService.getCurrentUser()
+      setUser(updatedUser)
+    } catch (err) {
+      console.error('Ошибка при обновлении пользователя:', err)
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        logout,
+        refreshUser, 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
