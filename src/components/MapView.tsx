@@ -133,10 +133,11 @@ export function MapView({
 					)
 					mapRef.current.geoObjects.add(caspianPolygon)
 				// Обработка кликов
-				mapRef.current.events.add('click', e => {
+				mapRef.current.events.add('click', () => {
 					if (!pickModeRef.current || !onMapClickRef.current) return
-					const coords = e.get('coords') as [number, number]
-					const [lat, lng] = coords
+				
+					const center = mapRef.current!.getCenter()
+					const [lat, lng] = center
 
 					const inCaspian =
 						lat >= CASPIAN_BOUNDS.southWest[0] &&
