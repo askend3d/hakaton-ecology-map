@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { AddPointDialog } from '@/components/AddPointDialog'
 import { FilterPanel } from '@/components/FilterPanel'
 import { MapView } from '@/components/MapView'
-import { PointDetailsSheet } from '@/components/PointDetailsSheet'
 import { PollutionCard } from '@/components/PollutionCard'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAuth } from '@/context/AuthContext'
 import { List, MapIcon } from 'lucide-react'
 import { PollutionPoint, PollutionStatus, PollutionType } from '@/types/pollution'
+import { PointDetailsSheet } from '@/components/PointDetailsSheet'
 
 const Index = () => {
   const [points, setPoints] = useState<PollutionPoint[]>([])
@@ -78,15 +78,21 @@ const Index = () => {
   if (loadingPoints) return <div className="text-center p-10">Загрузка точек...</div>
   if (error) return <div className="text-center text-red-500 p-10">{error}</div>
 
-  const handleAddPoint = (data: Omit<PollutionPoint, 'id'>) => {
-    const newPoint: PollutionPoint = { ...data, id: Date.now().toString() }
-    setPoints([...points, newPoint])
-    setPickedCoords(null)
+  const handleAddPoint = (newPoint: PollutionPoint) => {
+	setPoints(prev => [...prev, newPoint]) // добавляем новый объект с id
+	setSelectedPoint(newPoint) // теперь у выбранной точки точно есть id
   }
 
   const handleStatusChange = (id: string, status: PollutionStatus) => {
-    setPoints(points.map((p) => (p.id === id ? { ...p, status, updatedAt: new Date() } : p)))
-  }
+	// 🔹 Обновляем список точек
+	setPoints(points.map(p => (p.id === id ? { ...p, status, updatedAt: new Date() } : p)))
+
+	// 🔹 Обновляем выбранную точку — чтобы Select сразу отреагировал
+	if (selectedPoint && selectedPoint.id === id) {
+		setSelectedPoint({ ...selectedPoint, status })
+	}
+}
+
 
   const handlePointClick = (point: PollutionPoint) => {
     setSelectedPoint(point)

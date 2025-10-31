@@ -34,6 +34,7 @@ interface YMapInstance {
 	getCenter(): [number, number]
 	setCenter(center: [number, number], zoom?: number, options?: unknown): void
 	geoObjects: YMapGeoObjectsApi
+	controls: any
 	destroy(): void
 }
 interface YPlacemark {
@@ -87,40 +88,51 @@ export function MapView({
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const mapRef = useRef<YMapInstance | null>(null)
 	const placemarksRef = useRef<YPlacemark[]>([])
-	const onMapClickRef = useRef<typeof onMapClick>(onMapClick)
-	const onCenterChangeRef = useRef<typeof onCenterChange>(onCenterChange)
-	const pickModeRef = useRef<boolean | undefined>(pickMode)
+	const [mapReady, setMapReady] = useState(false)
 	const [alertVisible, setAlertVisible] = useState(false)
-
-	useEffect(() => {
-		onMapClickRef.current = onMapClick
-		onCenterChangeRef.current = onCenterChange
-		pickModeRef.current = pickMode
-	}, [onMapClick, onCenterChange, pickMode])
 
 	useEffect(() => {
 		let unmounted = false
 		const apiKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY as string | undefined
+
 		loadYandexApi(apiKey)
 			.then(ymaps => {
 				if (unmounted || !containerRef.current) return
+
+				// создаем карту
 				mapRef.current = new ymaps.Map(containerRef.current, {
 					center: MAP_CENTER,
 					zoom: MAP_ZOOM,
 					controls: ['zoomControl'],
 				})
+
+				// ограничения масштаба
 				mapRef.current.options.set('minZoom', 4)
 				mapRef.current.options.set('maxZoom', 18)
 
-				// Добавляем визуальную зону Каспия
+				// убираем логотипы и контролы
+				mapRef.current.controls.remove('typeSelector')
+				mapRef.current.controls.remove('fullscreenControl')
+				mapRef.current.controls.remove('searchControl')
+				mapRef.current.controls.remove('trafficControl')
+				mapRef.current.controls.remove('rulerControl')
+
+				setTimeout(() => {
+					const panes = document.querySelectorAll(
+						'.ymaps-2-1-79-copyrights-pane, .ymaps-2-1-79-map-copyrights-promo'
+					)
+					panes.forEach(el => ((el as HTMLElement).style.display = 'none'))
+				}, 1000)
+
+				// прозрачная зона каспия
 				const caspianPolygon = new ymaps.Polygon(
 					[
 						[
-						CASPIAN_BOUNDS.southWest,
-						[CASPIAN_BOUNDS.southWest[0], CASPIAN_BOUNDS.northEast[1]],
-						CASPIAN_BOUNDS.northEast,
-						[CASPIAN_BOUNDS.northEast[0], CASPIAN_BOUNDS.southWest[1]],
-						CASPIAN_BOUNDS.southWest,
+							CASPIAN_BOUNDS.southWest,
+							[CASPIAN_BOUNDS.southWest[0], CASPIAN_BOUNDS.northEast[1]],
+							CASPIAN_BOUNDS.northEast,
+							[CASPIAN_BOUNDS.northEast[0], CASPIAN_BOUNDS.southWest[1]],
+							CASPIAN_BOUNDS.southWest,
 						],
 					],
 					{},
@@ -128,17 +140,16 @@ export function MapView({
 						fillColor: '#00bfff22',
 						strokeColor: '#00bfff',
 						strokeWidth: 2,
-						interactivityModel: 'default#transparent', // 🧩 не блокирует клики по карте
+						interactivityModel: 'default#transparent',
 					}
-					)
-					mapRef.current.geoObjects.add(caspianPolygon)
-				// Обработка кликов
-				mapRef.current.events.add('click', () => {
-					if (!pickModeRef.current || !onMapClickRef.current) return
-				
-					const center = mapRef.current!.getCenter()
-					const [lat, lng] = center
+				)
+				mapRef.current.geoObjects.add(caspianPolygon)
 
+				// клики по карте
+				mapRef.current.events.add('click', () => {
+					if (!pickMode || !onMapClick) return
+
+					const [lat, lng] = mapRef.current!.getCenter()
 					const inCaspian =
 						lat >= CASPIAN_BOUNDS.southWest[0] &&
 						lat <= CASPIAN_BOUNDS.northEast[0] &&
@@ -146,12 +157,15 @@ export function MapView({
 						lng <= CASPIAN_BOUNDS.northEast[1]
 
 					if (inCaspian) {
-						onMapClickRef.current(lat, lng)
+						onMapClick(lat, lng)
 					} else {
 						setAlertVisible(true)
 						setTimeout(() => setAlertVisible(false), 2500)
 					}
 				})
+
+				// ✅ флаг готовности карты
+				setMapReady(true)
 			})
 			.catch(() => {})
 
@@ -164,17 +178,18 @@ export function MapView({
 		}
 	}, [])
 
-	// Отображение меток загрязнения
+	// ✅ метки отображаются сразу после готовности карты
 	useEffect(() => {
+		if (!mapReady || !mapRef.current || !window.ymaps) return
 		const ymaps = window.ymaps
-		if (!mapRef.current || !ymaps) return
 
+		// очищаем старые
 		placemarksRef.current.forEach(p => mapRef.current!.geoObjects.remove(p))
 		placemarksRef.current = []
 
 		const colorByStatus: Record<string, string> = {
 			new: '#ef4444',
-			in_progress: '#f59e0b',
+			in_progress: '#f59f0a',
 			cleaned: '#22c55e',
 		}
 
@@ -191,18 +206,18 @@ export function MapView({
 			const balloonHtml = `
 				<div style="min-width:200px">
 					<div style="font-weight:600;margin-bottom:8px">
-						${POLLUTION_TYPE_LABELS[point.type]}
+						${POLLUTION_TYPE_LABELS[point.pollution_type]}
 					</div>
 					<div style="display:inline-block;padding:2px 8px;border-radius:4px;margin-bottom:8px;background:${color}22;color:${color}">
 						${POLLUTION_STATUS_LABELS[point.status]}
 					</div>
 					<p style="color:#6b7280;margin-top:8px;font-size:12px">
-						${point.description}
+						${point.description || 'Без описания'}
 					</p>
 				</div>
 			`
 
-			const pm = new ymaps.Placemark(
+			const placemark = new ymaps.Placemark(
 				[point.latitude, point.longitude],
 				{ balloonContent: balloonHtml },
 				{
@@ -213,11 +228,11 @@ export function MapView({
 				}
 			)
 
-			pm.events.add('click', () => onPointSelect(point))
-			mapRef.current.geoObjects.add(pm)
-			placemarksRef.current.push(pm)
+			placemark.events.add('click', () => onPointSelect(point))
+			mapRef.current.geoObjects.add(placemark)
+			placemarksRef.current.push(placemark)
 		})
-	}, [points, onPointSelect])
+	}, [points, mapReady, onPointSelect])
 
 	return (
 		<div className="relative h-full w-full rounded-lg border overflow-hidden">
